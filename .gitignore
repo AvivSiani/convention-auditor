@@ -1,0 +1,12 @@
+# Virtual environment — local, never committed
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Environment files and secrets — never commit
+.env
+
+# macOS system files
+.DS_Store
