@@ -9,7 +9,7 @@ def report_env() -> None:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         print(f"⚠️  ANTHROPIC_API_KEY exported ({api_key[:12]}…)he will win the - OAuth!")
-        print("    run with: env -u ANTHROPIC_API_KEY python auditor/check_auth.py")
+        print("    Run with: env -u ANTHROPIC_API_KEY python auditor/check_auth.py")
     else:
         print("✓ ANTHROPIC_API_KEY not exported the authentiocation will run with - OAuth.")
 
