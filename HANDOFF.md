@@ -7,14 +7,14 @@
 
 ## Current status
 
-The foundation and the first pipeline component are complete and verified.
+The foundation and the first two pipeline components are complete and verified.
 
 | Stage | What it is | Status |
 |-------|-----------|--------|
 | Stage 0 | Verify SDK works and auth is on the subscription | ✅ Done & verified |
 | Stage 1 | Change collection — `git diff` component | ✅ Done & verified |
-| Stage 2 | Analysis — prompt + structured findings | ⬜ **Next** |
-| Stage 3 | Assembly — wire all components in `main.py` | ⬜ Not started |
+| Stage 2 | Analysis — prompt + structured findings | ✅ Done & verified |
+| Stage 3 | Assembly — wire all components in `main.py` | ⬜ **Next** |
 
 The repo is initialized, committed, and pushed to GitHub
 (`git@github.com:AvivSiani/convention-auditor.git`).
@@ -28,16 +28,17 @@ convention-auditor/
 ├── auditor/
 │   ├── __init__.py       # marks auditor/ as an importable package
 │   ├── check_auth.py     # Stage 0: subscription-auth sanity check
-│   └── collect.py        # Stage 1: runs git diff, returns the change
+│   ├── collect.py        # Stage 1: runs git diff, returns the change
+│   └── analyze.py        # Stage 2: sends conventions+diff to Claude, returns findings
 ├── .gitignore
 ├── requirements.txt
+├── CONVENTIONS.md        # conventions this project's own diffs are checked against
 ├── ARCHITECTURE.md       # design + decisions with rationale
 └── HANDOFF.md            # this file
 ```
 
 Planned additions (see ARCHITECTURE.md §3):
-`auditor/conventions.py`, `auditor/analyze.py`, `auditor/report.py`, `main.py`,
-and a `CONVENTIONS.md` at the root.
+`auditor/conventions.py`, `auditor/report.py`, `main.py`.
 
 ---
 
@@ -86,6 +87,17 @@ With no uncommitted changes it prints `(no changes against the comparison base)`
 with changes it prints a real git diff. `collect_diff(base=...)` accepts `HEAD`,
 `main`, etc.
 
+**Stage 2 — analysis.**
+
+```bash
+env -u ANTHROPIC_API_KEY python -m auditor.analyze
+```
+
+Runs `analyze()` standalone against a small fixed sample conventions+diff pair
+baked into `_main()` (deliberately not wired to `collect_diff` — see the Stage 2
+recap below). Prints structured findings, or "no findings" if the sample is
+clean. `analyze(conventions, diff)` is the contract other code should call.
+
 ---
 
 ## The one gotcha that will bite
@@ -100,39 +112,54 @@ subscription OAuth and bills you per token. Symptoms: unexpected billing, or an
 
 ---
 
-## Next step: Stage 2 — the analysis component
+## Stage 2 recap — the analysis component
 
-This is the heart of the agent and the only stage that will not change under
-either planned extension, so it deserves the most care.
+Built and verified in `auditor/analyze.py`. Contract:
+`async analyze(conventions text, diff text) → structured findings list`.
 
-**Contract:** `(conventions text, diff text) → structured findings list`
+Key points, per ARCHITECTURE.md §4.3:
 
-**Build it in `auditor/analyze.py`.** Key points to honor (from ARCHITECTURE.md
-§4.3):
+1. Schema and JSON-only instruction live in a fixed `SYSTEM_PROMPT`, passed via
+   `ClaudeAgentOptions(system_prompt=...)`; the per-call conventions+diff go in
+   the user prompt. Per finding: `file`, `severity`, `description`.
+2. Parsing is lenient: strips a leading/trailing ` ``` ` code fence if present,
+   then `json.loads`. Raises a `RuntimeError` with the raw text on real parse
+   failure — validated, not assumed.
+3. Empty findings list (`[]`) is a valid "all clear" result, not an error.
+4. Response text is pulled from message content blocks with
+   `getattr(block, "text", None)`, following the defensive pattern from
+   `check_auth.py` — the SDK message shape isn't assumed fixed.
+5. `_main()` deliberately uses a **fixed sample** conventions+diff pair rather
+   than calling `collect_diff()` from Stage 1 — real end-to-end testing (real
+   `CONVENTIONS.md` + real `git diff`) was pulling the collection stage into the
+   analysis component, violating convention 5 (stage separation) in this
+   project's own `CONVENTIONS.md`. Wiring `collect_diff()` output into
+   `analyze()` is Stage 3's job.
 
-1. Send Claude two inputs: the convention text and the diff.
-2. Define an explicit schema in the system prompt — per finding: `file`,
-   `severity`, `description` — and instruct the model to return **JSON only**, no
-   wrapping text.
-3. **Validate** the response: attempt to parse; handle parse failure gracefully.
-   Do not assume valid JSON every time — this is the main failure point.
-4. Treat an **empty findings list** as a valid "all clear" result, distinct from
-   an error.
-5. Keep the structure minimal for now; the `suggested fix` field is added later,
-   when the patch stage arrives.
+Verified by dogfooding: running `analyze()` against this repo's own staged diff
+(when `analyze.py` + `CONVENTIONS.md` were new files) correctly flagged a
+missing docstring and the stage-separation violation above — then came back
+clean after the fix.
 
-The SDK message shape (`query()`, message/content blocks) can vary between SDK
-versions. When wiring the call, inspect the actual message objects
-(`print(type(message), message)`) rather than assuming a fixed structure — the
-`getattr(block, "text", None)` pattern in `check_auth.py` is the defensive
-reference.
+---
+
+## Next step: Stage 3 — assembly (`main.py`)
+
+Wire the four components together: read `CONVENTIONS.md` → `collect_diff()` →
+`analyze()` → print findings to stdout (Stage 4's action stage, report-only for
+now per ARCHITECTURE.md §4.2).
+
+Open questions to resolve while building it:
+- What comparison base to default to, and whether to accept it as a CLI arg
+  (`main` vs `HEAD`); what to do when `main` doesn't exist (fall back to `HEAD`,
+  or fail clearly).
+- Exit code / output format when findings exist vs. when the diff is clean —
+  useful if this is ever invoked from a script or hook later.
 
 ---
 
 ## Open decisions deferred to later stages
 
-- What to do when `main` does not exist (fall back to `HEAD`, or fail with a clear
-  message) — decide when assembling `main.py`.
 - Whether `check_auth.py` stays as a permanent sanity tool or is eventually removed
   (it was a Stage 0 utility, not a core component).
 - Commit-message convention (plain vs. Conventional Commits) — revisit alongside
