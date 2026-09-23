@@ -90,13 +90,17 @@ Convention source → Change collection → Analysis → Action
 
 | Stage | Contract (in → out) | Current implementation | File |
 |-------|--------------------|-----------------------|------|
-| Convention source | () → convention text | reads `CONVENTIONS.md` | `auditor/conventions.py` (planned) |
+| Convention source | () → convention text | reads `CONVENTIONS.md` | inlined in `main.py`; `auditor/conventions.py` (planned) |
 | Change collection | base → diff text | `git diff` via subprocess | `auditor/collect.py` |
-| Analysis | (conventions, diff) → findings | calls Claude via Agent SDK | `auditor/analyze.py` (planned) |
-| Action | findings → result | prints to stdout | `auditor/report.py` (planned) |
+| Analysis | (conventions, diff) → findings | calls Claude via Agent SDK | `auditor/analyze.py` |
+| Action | findings → result | prints to stdout | inlined in `main.py`; `auditor/report.py` (planned) |
 
-`main.py` (planned) is the only piece that knows about all four; it wires them
-together.
+`main.py` is the only piece that knows about all four; it wires them together.
+Convention source and action are currently a few inline lines within it rather
+than separate modules — small enough not to warrant extraction yet. They stay
+easy to pull out into `auditor/conventions.py` / `auditor/report.py` later
+because `main.py` only ever touches them through the same in → out shape the
+table above describes; extraction would just move code, not change a contract.
 
 ### Why separation is the whole point
 
@@ -170,8 +174,12 @@ hook can wrap the existing `main.py` later without changing anything underneath.
 
 `git diff` runs against `main` by default (the pre-PR review scenario, the most
 common use), but the base is a parameter, not hard-coded — so `HEAD` (changes not
-yet committed) or a staged-only view can be requested at any time. This mirrors
-the manual-invocation philosophy: explicit control in the user's hands.
+yet committed) or a staged-only view can be requested at any time via `main.py
+--base`. This mirrors the manual-invocation philosophy: explicit control in the
+user's hands. For the same reason, if the requested base doesn't exist, `main.py`
+fails with a clear error rather than silently falling back to another base — a
+silent substitution would mean the user thinks they audited against `main` when
+they didn't.
 
 ### 4.6 Project structure: modular from the start
 

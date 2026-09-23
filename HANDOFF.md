@@ -7,14 +7,14 @@
 
 ## Current status
 
-The foundation and the first two pipeline components are complete and verified.
+The core pipeline is complete end to end and verified.
 
 | Stage | What it is | Status |
 |-------|-----------|--------|
 | Stage 0 | Verify SDK works and auth is on the subscription | ✅ Done & verified |
 | Stage 1 | Change collection — `git diff` component | ✅ Done & verified |
 | Stage 2 | Analysis — prompt + structured findings | ✅ Done & verified |
-| Stage 3 | Assembly — wire all components in `main.py` | ⬜ **Next** |
+| Stage 3 | Assembly — wire all components in `main.py` | ✅ Done & verified |
 
 The repo is initialized, committed, and pushed to GitHub
 (`git@github.com:AvivSiani/convention-auditor.git`).
@@ -30,6 +30,7 @@ convention-auditor/
 │   ├── check_auth.py     # Stage 0: subscription-auth sanity check
 │   ├── collect.py        # Stage 1: runs git diff, returns the change
 │   └── analyze.py        # Stage 2: sends conventions+diff to Claude, returns findings
+├── main.py               # Stage 3: wires all four stages together, the CLI entry point
 ├── .gitignore
 ├── requirements.txt
 ├── CONVENTIONS.md        # conventions this project's own diffs are checked against
@@ -37,8 +38,9 @@ convention-auditor/
 └── HANDOFF.md            # this file
 ```
 
-Planned additions (see ARCHITECTURE.md §3):
-`auditor/conventions.py`, `auditor/report.py`, `main.py`.
+Planned additions (see ARCHITECTURE.md §3): `auditor/conventions.py` and
+`auditor/report.py`, if/when convention-source and action outgrow being a few
+inline lines in `main.py`.
 
 ---
 
@@ -98,6 +100,18 @@ baked into `_main()` (deliberately not wired to `collect_diff` — see the Stage
 recap below). Prints structured findings, or "no findings" if the sample is
 clean. `analyze(conventions, diff)` is the contract other code should call.
 
+**Stage 3 — full pipeline (the actual tool).**
+
+```bash
+env -u ANTHROPIC_API_KEY python main.py                # diff against main (default)
+env -u ANTHROPIC_API_KEY python main.py --base HEAD    # uncommitted changes
+```
+
+Reads `CONVENTIONS.md`, diffs against `--base` (default `main`), sends both to
+`analyze()`, and prints findings. Exit code: `0` clean or no changes, `1`
+findings exist, `2` error (e.g. `--base` doesn't exist — the message tells you
+to retry with `--base HEAD`).
+
 ---
 
 ## The one gotcha that will bite
@@ -143,18 +157,38 @@ clean after the fix.
 
 ---
 
-## Next step: Stage 3 — assembly (`main.py`)
+## Stage 3 recap — assembly (`main.py`)
 
-Wire the four components together: read `CONVENTIONS.md` → `collect_diff()` →
-`analyze()` → print findings to stdout (Stage 4's action stage, report-only for
-now per ARCHITECTURE.md §4.2).
+Built and verified. `main.py` is the only file that knows about all four
+stages; it reads `CONVENTIONS.md`, calls `collect_diff(base)`, calls
+`analyze()`, and prints findings — the previously-open decisions are now
+resolved this way:
 
-Open questions to resolve while building it:
-- What comparison base to default to, and whether to accept it as a CLI arg
-  (`main` vs `HEAD`); what to do when `main` doesn't exist (fall back to `HEAD`,
-  or fail clearly).
-- Exit code / output format when findings exist vs. when the diff is clean —
-  useful if this is ever invoked from a script or hook later.
+1. `--base` is a CLI arg, default `main` (ARCHITECTURE.md §4.5).
+2. If the requested base doesn't exist, `main.py` **fails with a clear error**
+   pointing at `--base HEAD` — no silent fallback to a different base than the
+   one requested.
+3. Exit code reflects outcome: `0` clean/no changes, `1` findings exist, `2`
+   error. Output itself stays report-only stdout printing (§4.2) — the exit
+   code is just metadata a future script/hook caller could use; no hook or CI
+   integration was added.
+
+Verified against three real cases: a clean diff, a diff with real findings
+(exit 1), and a nonexistent `--base` (exit 2, correct error message).
+
+---
+
+## Next: no fixed next step
+
+The core pipeline (all four stages) is complete and dogfooding on this repo's
+own diffs. From here, natural directions — not started, not committed to:
+
+- Extract `auditor/conventions.py` / `auditor/report.py` out of `main.py` if
+  those inline bits grow (see ARCHITECTURE.md §3 note).
+- Either of the two planned extensions in ARCHITECTURE.md §5 (infer
+  conventions from code; propose a patch to approve).
+- Broaden `CONVENTIONS.md` itself now that there's a working loop to test
+  changes against.
 
 ---
 
