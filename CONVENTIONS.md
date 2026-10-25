@@ -17,7 +17,10 @@
 4. **Defensive access to SDK response objects.** When reading fields off
    Claude Agent SDK message/content objects, use `getattr(obj, "field", None)`
    and check before use — do not assume a fixed shape, since it can vary
-   between SDK versions.
+   between SDK versions. This applies only to objects whose shape the SDK
+   controls. Data whose shape this project defines and validates at a stage
+   boundary (e.g. findings after `_validate_finding`) is trusted downstream
+   and accessed directly.
 
 5. **Stages stay separated.** Each file/component does exactly one job in the
    pipeline (convention source, collection, analysis, action) and does not

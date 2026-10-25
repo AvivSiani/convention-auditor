@@ -135,10 +135,13 @@ Key points, per ARCHITECTURE.md §4.3:
 
 1. Schema and JSON-only instruction live in a fixed `SYSTEM_PROMPT`, passed via
    `ClaudeAgentOptions(system_prompt=...)`; the per-call conventions+diff go in
-   the user prompt. Per finding: `file`, `severity`, `description`.
+   the user prompt. Per finding: `file`, `start_line`, `end_line` (new-file
+   line numbers, both `null` if not line-specific), `severity`, `description`.
 2. Parsing is lenient: strips a leading/trailing ` ``` ` code fence if present,
    then `json.loads`. Raises a `RuntimeError` with the raw text on real parse
-   failure — validated, not assumed.
+   failure — validated, not assumed. Each finding is then checked by
+   `_validate_finding` (required string fields, severity in `SEVERITIES`,
+   valid line range). `main.py` catches that error and exits `2`.
 3. Empty findings list (`[]`) is a valid "all clear" result, not an error.
 4. Response text is pulled from message content blocks with
    `getattr(block, "text", None)`, following the defensive pattern from

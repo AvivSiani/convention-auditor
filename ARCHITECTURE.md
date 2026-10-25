@@ -146,7 +146,9 @@ stdout gives a seconds-long iteration loop. Patch proposal is the planned upgrad
 ### 4.3 Findings format: structured, minimal-first
 
 Findings come back from Claude as a **structured** list (per finding: file,
-severity, description), not free text. The reason is forward-looking: the future
+start_line, end_line, severity, description), not free text. Line numbers refer
+to the new version of the file and are both `null` when a finding isn't tied to
+specific lines. The reason is forward-looking: the future
 patch stage needs to know file and location, which free text cannot reliably
 provide. We start with a minimal structure and add a "suggested fix" field only
 when we reach the patch stage — paying up front only for what is useful today
@@ -155,7 +157,8 @@ when we reach the patch stage — paying up front only for what is useful today
 **Risk to handle explicitly:** asking an LLM for consistent structure means
 relying on valid JSON every time. This is the most common failure point in agents
 like this. The analysis stage must **validate** what comes back (attempt to parse,
-handle failure) rather than assume success.
+check each finding's fields, severity values and line range, handle failure)
+rather than assume success. Downstream stages can then rely on that contract.
 
 **Empty findings are a valid result, not a failure.** The agent must distinguish
 "checked, all clear" from "something went wrong."

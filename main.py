@@ -23,6 +23,15 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def format_finding(finding: dict) -> str:
+    """Return a one-line human-readable rendering of a validated finding."""
+    location = finding["file"]
+    start, end = finding["start_line"], finding["end_line"]
+    if start is not None:
+        location += f":{start}" if start == end else f":{start}-{end}"
+    return f"[{finding['severity']}] {location}: {finding['description']}"
+
+
 async def run(base: str) -> int:
     """Run the full pipeline once; return the process exit code."""
     conventions = CONVENTIONS_PATH.read_text()
@@ -38,14 +47,18 @@ async def run(base: str) -> int:
         print("(no changes against the comparison base)")
         return 0
 
-    findings = await analyze(conventions, diff)
+    try:
+        findings = await analyze(conventions, diff)
+    except RuntimeError as e:
+        print(f"Error analyzing diff: {e}", file=sys.stderr)
+        return 2
 
     if not findings:
         print("No findings — the diff is clean.")
         return 0
 
     for finding in findings:
-        print(f"[{finding.get('severity', '?')}] {finding.get('file', '?')}: {finding.get('description', '?')}")
+        print(format_finding(finding))
     return 1
 
 
